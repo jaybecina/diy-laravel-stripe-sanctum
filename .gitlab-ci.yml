@@ -1,0 +1,104 @@
+stages:
+  - check
+  - fetch
+  # - checkout
+  # - clear-deps
+  - deps
+  # - clear-cache
+  - build-config-cache
+  - build-route-cache
+  # - build-view-cache
+  - database
+
+before_script:
+  - "which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )"
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+
+Check Vars:
+  type: deploy
+  stage: check
+  environment: uat
+  variables:
+    UAT_SERVER: $UAT_SERVER
+    UAT_REPO_DIR: $UAT_REPO_DIR
+  script:
+    - echo "UAT Server - $UAT_SERVER"
+    - echo "UAT Repo Dir - $UAT_REPO_DIR"
+  only:
+    - master
+
+Pull Master:
+  type: deploy
+  stage: fetch
+  environment: uat
+  script:
+    - ssh nxt@10.13.37.106 "cd /var/www/diy-api && git pull"
+  only:
+    - master
+
+# Delete Composer:
+#   type: deploy
+#   stage: clear-deps
+#   environment: uat
+#   script:
+#     - ssh nxt@10.13.37.106 "rm -Rf /var/www/diy-api/vendor"
+#   only:
+#     - master
+
+Composer Deps:
+  type: deploy
+  stage: deps
+  environment: uat
+  script:
+    - ssh nxt@10.13.37.106 "cd /var/www/diy-api && composer install"
+  only:
+    - master
+
+# Clear Laravel Cache:
+#   type: deploy
+#   stage: clear-cache
+#   environment: uat
+#   script:
+#     - ssh nxt@10.13.37.106 "cd /var/www/diy-api && php artisan cache:clear"
+#   only:
+#     - master
+
+Cache UAT env:
+  type: deploy
+  stage: build-config-cache
+  environment: uat
+  script:
+    - ssh nxt@10.13.37.106 "cd /var/www/diy-api && php artisan config:cache"
+  only:
+    - master
+
+Cache Routes:
+  type: deploy
+  stage: build-route-cache
+  environment: uat
+  script:
+    - ssh nxt@10.13.37.106 "cd /var/www/diy-api && php artisan route:cache"
+  only:
+    - master
+
+# Cache Views:
+#   type: deploy
+#   stage: build-view-cache
+#   environment: uat
+#   script:
+#     - ssh nxt@10.13.37.106 "cd /var/www/diy-api && php artisan view:cache"
+#   only:
+#     - master
+
+Run Migrations:
+  type: deploy
+  stage: database
+  environment: uat
+  script:
+    - ssh nxt@10.13.37.106 "cd /var/www/diy-api && php artisan migrate:fresh --seed && composer dump-autoload"
+  only:
+    - master
